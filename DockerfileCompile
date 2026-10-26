@@ -7,10 +7,11 @@ WORKDIR /build
 RUN set -ex; \
             mkdir -p /src/libssh/build; \
             cd /src; \
-            wget -O libssh.tar.xz https://www.libssh.org/files/0.9/libssh-0.9.0.tar.xz; \
+            wget -O libssh.tar.xz https://www.libssh.org/files/0.10/libssh-0.10.6.tar.xz; \
             tar -xf libssh.tar.xz -C /src/libssh --strip-components=1; \
             cd /src/libssh/build; \
             cmake -DCMAKE_INSTALL_PREFIX:PATH=/usr \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DWITH_SFTP=OFF -DWITH_SERVER=OFF -DWITH_PCAP=OFF \
             -DWITH_STATIC_LIB=ON -DWITH_GSSAPI=OFF ..; \
             make -j $(nproc); \
@@ -19,7 +20,11 @@ RUN set -ex; \
 COPY compat ./compat
 COPY *.c *.h autogen.sh Makefile.am configure.ac ./
 
-RUN ./autogen.sh && ./configure --enable-static
+# glibc provides forkpty. gcc 16 rejects configure's implicit declaration,
+# so the linux compat file is still listed and has to exist.
+RUN echo '/* forkpty is provided by glibc on Linux */' > compat/forkpty-linux.c
+
+RUN ./autogen.sh && ./configure
 RUN make -j $(nproc)
 RUN objcopy --only-keep-debug tmate tmate.symbols && chmod -x tmate.symbols && strip tmate
 RUN ./tmate -V
